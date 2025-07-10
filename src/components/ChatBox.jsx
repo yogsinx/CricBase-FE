@@ -1,4 +1,6 @@
-import  { useState } from 'react';
+import { useEffect, useState } from 'react';
+
+const LOCAL_STORAGE_KEY = 'cricket-chat-context';
 
 export default function ChatBox() {
   const [query, setQuery] = useState('');
@@ -7,9 +9,23 @@ export default function ChatBox() {
   const [error, setError] = useState('');
   const [messages, setMessages] = useState([]); // { user: '', bot: '' }
 
+  // ✅ Load from localStorage on mount
+  useEffect(() => {
+    const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (stored) {
+      setMessages(JSON.parse(stored));
+    }
+  }, []);
+
+  // ✅ Save to localStorage on every message update
+  useEffect(() => {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(messages));
+  }, [messages]);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!query.trim()) return;
+
     const context = [...messages]; // send past messages
     setLoading(true);
     setResponse('');
@@ -19,22 +35,20 @@ export default function ChatBox() {
       const res = await fetch('http://localhost:3001/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query , context})
+        body: JSON.stringify({ query, context })
       });
 
-      if (!res.ok) {
-        throw new Error(`Server error: ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
 
-      const reply = await res.json();
+      const data = await res.json();
 
-      if (reply) {
-        setResponse(reply);
-        setMessages([...messages, { user: query, bot: reply }]);
-        setQuery(''); // clear input after sending
-        setError(''); // clear any previous error
+      if (data?.reply) {
+        const newMessages = [...messages, { user: query, bot: data.reply }];
+        setMessages(newMessages);
+        setQuery('');
+        setResponse(data.reply);
       } else {
-        setError('No response from server.');
+        setError('⚠️ No response from server.');
       }
     } catch (err) {
       console.error('Fetch error:', err);
@@ -44,10 +58,27 @@ export default function ChatBox() {
     }
   };
 
+  const clearChat = () => {
+    setMessages([]);
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
+    setResponse('');
+    setError('');
+  };
+
   return (
     <div className="bg-white border border-gray-200 rounded-lg shadow p-4">
-      <h2 className="text-xl font-semibold mb-4 text-green-700">🤖 Hey! I know all about cricket, try me!
-      </h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-xl font-semibold text-green-700">
+          🤖 Hey! I know all about cricket — try me!
+        </h2>
+        <button
+          onClick={clearChat}
+          className="text-sm text-red-600 hover:underline"
+        >
+          Clear chat
+        </button>
+      </div>
+
       <form onSubmit={handleSubmit} className="space-y-4">
         <input
           type="text"
@@ -62,20 +93,23 @@ export default function ChatBox() {
           disabled={loading}
           className="w-full bg-green-600 hover:bg-green-700 text-white py-2 rounded-md transition"
         >
-          {loading ? 'Thinking...' : `Ask AI expert!`}
+          {loading ? 'Thinking...' : 'Ask AI expert!'}
         </button>
       </form>
 
-      {response && (
-        <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-md">
-          <strong>Answer:</strong>
-          <p className="mt-2 whitespace-pre-line">{response.reply}</p>
-        </div>
-      )}
+      {/* Full chat history display */}
+      <div className="mt-6 space-y-4 max-h-72 overflow-y-auto pr-2">
+        {messages.map((msg, idx) => (
+          <div key={idx} className="bg-gray-50 border border-gray-200 rounded p-3">
+            <p><strong>You:</strong> {msg.user}</p>
+            <p className="mt-1"><strong>Bot:</strong> {msg.bot}</p>
+          </div>
+        ))}
+      </div>
 
       {error && (
         <div className="mt-4 text-red-600 bg-red-100 p-3 rounded-md border border-red-200">
-          ⚠️ {error}
+          {error}
         </div>
       )}
     </div>
