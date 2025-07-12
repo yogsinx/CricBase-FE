@@ -4,6 +4,7 @@ import viteCompression from 'vite-plugin-compression';
 import { visualizer } from 'rollup-plugin-visualizer';
 
 export default defineConfig({
+  base: '/CricBase-FE/', // match repo name
   plugins: [
     react(),
     visualizer({ open: true }), // Opens a treemap in browser
